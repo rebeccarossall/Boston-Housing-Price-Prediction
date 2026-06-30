@@ -1,0 +1,451 @@
+
+---
+title: "Boston Housing Price Prediction"
+output: pdf_document
+---
+The following report aims to create a predictive model for the median house price in Boston neighbourhoods, denoted as medv, based on the seven predictors below, which will be assessed in order to create the best fitting model:
+
+• crim, which contains the per capita crime rate by town.
+
+• zn, which contains the proportion of residential land.
+
+• rm, which contains the average number of rooms per house.
+
+• age, which contains the proportion of houses built before 1940.
+
+• dis, which contains distances to large employment centres.
+
+• ptratio, which contains the student-teacher ratio by town.
+
+• lstat, which contains the percentage of lower-status population.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+
+Train_csv <- read.csv("BostonTrain.csv", header = TRUE, skip = 2)
+colnames(Train_csv) <- c("medv", "crim", "zn", "rm", "age", "dis", "ptratio","lstat")
+
+library(ggplot2)
+library(dplyr)
+library(car)
+```
+
+To begin the exploratory analysis, we first plot each of the seven predictors against the response variable medv and assess the graphs below in order to assess what types of associations exist between medv and each predictor. The pairwise scatterplots were investigated below.
+
+```{r scatterplot-matrix, echo=FALSE}
+plot(Train_csv, cex=0.05)
+```
+
+We can see somewhat strong negative associations for the graphs of medv plotted against crim and medv against lstat, but neither have a visible linear association. The shape of both graphs has rapid declines that plateaus out, indicating a logarithmic transformation may be necessary when investigating these predictors further. The graph of medv plotted against ptratio also appears to have a potentially weaker negative association, yet the points are relatively spread.
+
+The graph of medv against zn appears to have a very weak or possibly no association, but it is hard to tell. This is also observed for the graph of medv against age, with an ambiguous trend- both could use further investigation.
+
+We can see some positive association between medv and rm, which is linear, so it will not be necessary to do any transformations to rm when exploring predictors. Medv and dis appear to have a potential weak positive association, but the trend is hard to see with such a variety of spread out points.
+
+The response variable, medv, is assumed to have a normal distribution under the assumptions of linear regression. The following histograms depict its distribution.
+
+
+```{r, echo= FALSE}
+layout(matrix(1:2, nrow = 1))
+hist(Train_csv$medv,
+     main = "Histogram of medv",
+     xlab = "medv",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist(log(Train_csv$medv),
+    main = "Histogram of log(medv)",
+    xlab = "log(medv)",
+    ylab = "Frequency",
+    breaks = 10 )
+
+```
+
+Looking at the histogram of medv, it is approximately normally distributed. Logging medv allows its distribution to be more centralised and closer to normal.
+
+When log-transforming medv, we can explore how this impacts its relationships with the predictor variables through the scatterplots below. 
+
+
+``` {r, echo = FALSE}
+Train2_csv = Train_csv
+
+Train2_csv$medv = log(Train2_csv$medv)
+plot(Train2_csv, cex = 0.05)
+
+```
+
+
+The graphs plotted against medv are overall less spread, implying improved associations, where we can see crim and lstat plotted against medv appearing more linear too. The reduced spread of the graphs of medv plotted against Zn and age, suggests there is a better chance in there being an association here. Thus, logging medv has resulted in compressing the spread of values, and suggests slightly stronger linear relationships overall, and so we will work with log(medv) from now on.
+
+First looking at the association between medv and crim. This association doesn't appear to be too linear, which is a necessary assumption, despite it being improved from logging medv. 
+
+Looking at the histograms of crim and log(crim).
+
+```{r, echo= FALSE}
+layout(matrix(1:2, nrow = 1))
+
+hist(Train_csv$crim,
+     main = "Histogram of crim",
+     xlab = "crim",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist(log(Train_csv$crim),
+    main = "Histogram of log(crim)",
+    xlab = "log(crim)",
+    ylab = "Frequency",
+    breaks = 10 )
+
+```
+
+Descending down the ladder of powers by applying logs to the Crim values appears to be necessary in order to correct the positive skew of data. This transformation is above, and the comparative plots below demonstrate the improvements in linearity across these transformations.
+
+
+```{r , echo=FALSE, fig.width=10, fig.height=5}
+
+
+#Plot 1: log(medv) vs crim
+
+qplot(crim, medv, data = Train2_csv, xlab = "crim", ylab="log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+#Plot 2: log(medv) vs log(crim)
+qplot(log(crim), medv, data = Train2_csv, xlab= "log(crim)", ylab= "log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+Train2_csv$crim <- log(Train2_csv$crim)
+
+```
+From looking at the above models, logging both medv and crim appears the most logical transformations in order to make this model linear.
+
+
+Now exploring zn, first by looking at the histograms below.
+
+```{r, echo= FALSE}
+layout(matrix(1:2, nrow = 1))
+hist(Train_csv$zn,
+     main = "Histogram of zn",
+     xlab = "zn",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist(log(Train_csv$zn+1),
+    main = "Histogram of log(zn)",
+    xlab = "log(zn)",
+    ylab = "Frequency",
+    breaks = 10 )
+
+```
+
+Above we can see that zn is positively skewed, so in an attempt to fix this, zn has been logged, yet the significant number of 0s appearing is a big issue here and could potentially be down to there not being any residential land in many neighbourhoods. The frequency and leverage of the 0s is too significant to exclude using Cook's distance, so we must leave zn as it was- not transformed.
+
+
+The distribution of age is explored in the below histograms.
+
+```{r, echo= FALSE}
+layout(matrix(1:2, nrow = 1))
+hist(Train_csv$age,
+     main = "Histogram of age",
+     xlab = "age",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist((Train_csv$age)^2,
+    main = "Histogram of (age)^2",
+    xlab = "(age)^2",
+    ylab = "Frequency",
+    breaks = 10 )
+
+```
+
+It is evident that age is negatively skewed, so squaring is attempted to help to correct this skew. Yet, regardless of any transformations done, age doesn't appear to be able to have a normal distribution as required for a linear model, and hence is already indicating that this predictor should be removed, especially as it does not visually make a significant difference when plotted against medv. Thus we will leave age as it is.
+
+
+Now focusing on the association between dis and medv. Although there appears to be a positive association, it doesn't appear especially linear. 
+
+Looking at the distribution of dis, we can see it is positively skewed, so logging dis will pull in the right tail, to become more normally distributed.
+
+```{r , echo=FALSE, fig.width=10, fig.height=5}
+
+
+#Plot 1: log(medv) vs dis
+
+qplot(dis, medv, data = Train2_csv, xlab = "dis", ylab="log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+#Plot 2: log(medv) vs log(dis)
+qplot(log(dis), medv, data = Train2_csv, xlab= "log(dis)", ylab= "log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+
+```
+
+There doesn't appear to be a significant improvement in association when plotted, but logging dis does appear to improve linearity, so is worth considering later in our model, if our significance value of dis is low.
+
+The distribution of ptratio is explored through the following histograms.
+
+```{r, echo= FALSE}
+layout(matrix(1:2, nrow = 1))
+hist(Train_csv$ptratio,
+     main = "Histogram of ptratio",
+     xlab = "ptratio",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist((Train_csv$ptratio)^2,
+    main = "Histogram of (ptratio)^2",
+    xlab = "(ptratio)^2",
+    ylab = "Frequency",
+    breaks = 10 )
+
+```
+
+Looking at the distribution of ptratio through the histograms above, we can see that the data of ptratio is negatively skewed. The second histogram shows an attempt to fix this skew by ascending the ladder of powers, yet the difference is insignificant in its distribution and when graphed, so we will let ptratio remain untransformed.
+
+
+Lastly, focusing on the distribution of lstat through the below histograms.
+
+```{r, echo= FALSE, fig.width=10}
+layout(matrix(1:2, nrow = 1))
+hist(Train_csv$lstat,
+     main = "Histogram of lstat",
+     xlab = "lstat",
+     ylab = "Frequency",
+     breaks = 10 )
+
+
+hist(log(Train_csv$lstat),
+    main = "Histogram of log(lstat)",
+    xlab = "log(lstat)",
+    ylab = "Frequency",
+    breaks = 10 )
+```
+
+Lstat appeared to have a slightly positive skew in distribution, so to correct this, a log-transformation has been applied to lstat.
+
+In order to explore if this transformation is necessary for modelling, we can compare the qplots of medv against lstat.
+
+```{r , echo=FALSE, fig.width=10, fig.height=5}
+
+
+#Plot 1: log(medv) vs lstat
+
+qplot(lstat, medv, data = Train2_csv, xlab = "lstat", ylab="log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+#Plot 2: log(medv) vs log(lstat)
+qplot(log(lstat), medv, data = Train2_csv, xlab= "log(lstat)", ylab= "log(medv)", geom = c('point')) + stat_smooth(method="lm") +   theme_bw()
+
+
+```
+
+There isn't a huge difference between the two plots, but the log-transformation has compressed lstat data, so the linearity of the plot does appear to improve. Therefore, this transformation should be considered within future modelling.
+
+
+
+
+Starting with an initial model, including all predictors, with no transformations which will be referred to as Model 0.
+
+```{r, echo=FALSE}
+fit0=lm(medv ~ crim + zn + rm + age + dis + ptratio + lstat,data=Train_csv)
+summary(fit0)
+```
+This model doesn't appear to be a great fit as it has very varied residuals, and R-squared and F-statistic values that could use improvements. Although 5 predictors appear to have high levels of association- at the 0.1% significance level which is a positive observation.
+
+Applying our first transformations of logging crim and medv to improve this model is seen below.
+
+```{r, echo=FALSE}
+
+fit1=lm(medv ~ crim + zn + rm + age + dis + ptratio + lstat,data=Train2_csv)
+summary(fit1)
+```
+
+Applying these two transformations, the range and median of the residuals improve along with the significance of model- indicated by the F-statistic. The significance of crim has improved also.
+
+In order to further improve this model, let's remove age and zn from our model, as there were not any significant transformations we can apply, and neither is significant at or even near the 10% level. They also appear to have very little effect on the model by its estimate value.
+
+```{r, echo=FALSE}
+
+
+fit2=lm(medv ~ crim + rm + dis + ptratio + lstat,data=Train2_csv)
+summary(fit2)
+```
+
+Removing age and zn, has resulted in a median value closer to 0 and slightly improved the adjusted r-squared values. Doing this has actually improved the significance and impact of the other predictors too, so has improved our model. Transforming dis actually would reduce the significance of its association with medv, and it is already very significant, so we leave dis as it is. This is my first official model: Model 1.
+
+
+Although lstat does appear to have the highest level of significance- significant at the 1% level- in the exploratory analysis, we noted that logging lstat improved linearity, so let's assess if this improves our model anymore.
+
+```{r, echo=FALSE}
+
+Train2_csv$lstat <- log(Train2_csv$lstat)
+
+fit3=lm(medv ~ crim + rm + dis + ptratio + lstat, data=Train2_csv)
+summary(fit3)
+```
+
+This has resulted in a very small increase in residual range and median value, however it has resulted in an improvement of over 0.01 in the R-squared values, and an increase of 12.4 in the F-statistic, which does imply that this has increased the significance of this model, and the p-value is still at the smallest significance level.
+
+Thus, whether transforming lstat is worth it is questionable, so this will be labelled Model 2, and assessed further against Model 1 and both compared using original Model 0  to determine which is a better fit. 
+
+AIC and BIC are used to compare models in the table below.
+
+```{r, echo=FALSE}
+AIC_values <- c( AIC(fit0), AIC(fit2), AIC(fit3))
+BIC_values <- c( BIC(fit0), BIC(fit2), BIC(fit3))
+
+results <- data.frame(
+  Model = c("Model 0", " Model 1", "Model 2"),
+  AIC = AIC_values,
+  BIC = BIC_values
+)
+knitr::kable(results, digits = 2)
+```
+
+The AIC and BIC results for Model 1 and Model 2 are significantly lower than for Model 0, suggesting that they are both significantly better fits than the original model. We can see Model 2 has a significantly lower AIC and BIC than Model 1 suggesting that Model 2 is the most appropriate model for this data and will be the model I work with henceforth.
+
+The following plot uses data derived from the chosen Model 2.
+
+``` {r, echo=FALSE, fig.width=10}
+
+plot(fit3, which=1)
+```
+
+The above plot demonstrates an acceptable residual plot, with the residuals scattered around zero and no discernible trend between the residuals and fitted values. This suggests that the model reasonably satisfies the assumptions of linearity and constant variance.
+
+A QQ plot is used to further assess the model.
+
+``` {r, echo=FALSE, fig.width=10}
+
+plot(fit3, which=2)
+
+```
+
+The QQ plot suggests that the chosen model satisfies the assumptions of normally distributed residuals, as most of the points fall on or near the diagonal reference line. The slight deviations are insignificant enough to ignore.
+
+The chosen model is now assessed for any unusual influential observations that could affect the results of the analysis.
+
+```{r, echo= FALSE, fig.width=10}
+
+influencePlot(fit3)
+
+```
+
+Point 126 appears to have the highest Cook's distance and residual value. However, referring back to the dataset, it does represent a valid observation, as do the three other highlighted potential anomalous points. None of these appear sufficiently extreme to justify their removal, so they have been retained in the analysis.
+
+All remaining observations have been retained, as some variation is expected and may be due to unaccounted factors, such as the differences in housing quality (for example, a run-down house in an expensive neighbourhood, or vice versa). Therefore, no observations have been removed from the dataset.
+
+
+
+The final model's predictions are plotted against the observed data points.
+
+```{r, echo=FALSE}
+
+predicted_values <- predict(fit3, newdata = Train2_csv)
+
+comparison_df <- data.frame(
+  actual = Train_csv$medv,  
+  predicted = exp(predicted_values)
+)
+
+
+ggplot(comparison_df, aes(x = predicted, y = actual)) +
+  geom_point(alpha = 0.5) + 
+  geom_abline(slope = 1, intercept = 0, color = "red") +  
+  labs(title = "Actual vs Predicted Values",
+       x = "Predicted Values",
+       y = "Actual Values") +
+  theme_minimal()
+
+```
+
+There is a strong association between the predicted values and actual values, with most of the points being close to or lying on the reference line. This suggests that the chosen model is an appropriate and accurate fit for predicting median house prices in Boston neighbourhoods.
+
+The summary statistics also support this conclusion, with similar median values of 21.6 and 20.5, and the mean values differing by just 0.38. The spread is very similar too, with the predicted model having a slightly larger range, potentially reflecting the decision to not remove any outliers. Overall, these differences are relatively small, indicating the chosen model to be an accurate predictor of the median house value in Boston.
+
+
+
+Now, using the chosen best model to predict the median value of house prices for the neighbourhoods in test data.
+
+``` {r, echo=FALSE}
+BostonTest_csv <- read.csv("BostonTest.csv", header = TRUE, skip = 1)
+
+```
+
+``` {r, echo=FALSE, fig.width=10}
+BostonTest = BostonTest_csv
+BostonTest$crim = log(BostonTest_csv$crim)
+BostonTest$lstat = log(BostonTest_csv$lstat)
+
+predicted_boston <- predict(fit3, newdata= BostonTest)
+predicted_boston_medv <- exp(predicted_boston)
+
+comparison <- data.frame(
+  Actual = BostonTest_csv$medv,
+  Predicted = predicted_boston_medv 
+)
+
+
+ggplot(comparison, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5) +  
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(title = "Actual Values of medv vs Predicted Values of medv",
+       x = "Actual Values of medv",
+       y = "Predicted Values medv") +
+  theme_minimal()
+
+
+```
+
+This graph shows the strong association between predicted and actual values of medv using the selected best model. The red line indicates a perfect linear association, and as most points are relatively close, this suggests that the fitted model is an accurate model for predicting the median values of houses in Boston. Although, there do appear to be a few outliers, this is to be expected where certain house prices may be anomalous, due to certain houses being cheaper/more expensive due to unique characteristics such as condition of the house or specific location- being a detached house, having scenic views or being right next to a busy loud road etc.
+
+
+The chosen model is now compared with the simple linear model medv ~ crim.
+
+Including extra predictors means that the chosen model includes a wider range of variables that could affect median house prices, so logically should be more accurate in general.
+
+
+``` {r, echo= FALSE}
+fit4=lm(medv ~ crim + rm + dis + ptratio + lstat, data=BostonTest)
+summary(fit4)
+```
+
+Looking specifically at the model of medv~crim.
+
+```{r, echo=FALSE}
+fit5=lm(medv ~ crim, data = BostonTest_csv)
+summary(fit5)
+```
+
+We can see the accuracy of this model is very poor compared to the chosen model, with it having a median closer to 0, and less varied residuals too. This model also produces a significantly lower adjusted R-squared value compared to the chosen predictive model, thus suggesting that it is a much worse fit for analysing median prices of Boston houses, despite having differing levels of variable significance here.
+
+Predictions of this simple model are shown in the plot shown below.
+
+``` {r, echo=FALSE, fig.width=10}
+
+
+predicted_simple <- predict(fit5, newdata= BostonTest_csv)
+
+comparison <- data.frame(
+  Actual = BostonTest_csv$medv,
+  Predicted = predicted_simple 
+)
+
+
+ggplot(comparison, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.5) +  
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(title = "Actual Values of medv vs Predicted Values of medv for the Simple Model",
+       x = "Actual Values of medv",
+       y = "Predicted Values medv") +
+  theme_minimal()
+
+
+```
+
+This graph shows a much weaker linear relationship than the chosen model. Thus the chosen model predictions are much more accurate compared to those of a simple model.
